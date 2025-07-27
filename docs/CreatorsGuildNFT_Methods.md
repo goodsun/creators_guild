@@ -6,7 +6,10 @@
 3. [バーン関連](#バーン関連)
 4. [管理関連](#管理関連)
 5. [照会関連](#照会関連)
-6. [内部関数](#内部関数)
+6. [パブリック変数・マッピング](#パブリック変数マッピング)
+7. [内部関数](#内部関数)
+8. [継承関数](#継承関数)
+9. [エラーコード一覧](#エラーコード一覧)
 
 ---
 
@@ -29,8 +32,8 @@ function mint(address to, string memory _metaUrl, uint16 _feeRate, bool _sbtFlag
 | _sbtFlag | bool | Soul Bound Token（譲渡不可）フラグ |
 
 #### 必要条件
-- msg.value >= mintFee
-- _feeRate <= maxFeeRate
+- msg.value >= mintFee (E1)
+- _feeRate <= maxFeeRate (E2)
 
 #### 動作
 1. ミント手数料の検証
@@ -83,7 +86,7 @@ function mintImported(
 | originalInfo | string | 元のNFT情報（コントラクトアドレス、トークンIDなど） |
 
 #### 必要条件
-- msg.sender == owner || importers[msg.sender] == true
+- msg.sender == owner || importers[msg.sender] == true (E14)
 
 #### 戻り値
 - uint256: 新しくミントされたトークンID
@@ -120,7 +123,7 @@ NFT転送と同時に受取人への寄付を行う
 | tokenId | uint256 | 転送するトークンID |
 
 #### 必要条件
-- msg.senderがトークンの所有者または承認済み
+- msg.senderがトークンの所有者または承認済み (E3)
 
 #### 動作
 1. 権限チェック
@@ -179,9 +182,9 @@ NFT転送時に購入者へ10%のキャッシュバックを提供
 | tokenId | uint256 | 転送するトークンID |
 
 #### 必要条件
-- msg.senderがトークンの所有者または承認済み
-- msg.value > 0
-- to != address(0)
+- msg.senderがトークンの所有者または承認済み (E3)
+- msg.value > 0 (E4)
+- to != address(0) (E5)
 
 #### 動作
 1. 権限チェック
@@ -192,7 +195,7 @@ NFT転送時に購入者へ10%のキャッシュバックを提供
 6. キャッシュバックを送信
 
 #### エラー
-- "Cashback transfer failed": キャッシュバック送信失敗時
+- E6: キャッシュバック送信失敗時
 
 ---
 
@@ -212,7 +215,7 @@ NFTを焼却（永久に削除）する
 | tokenId | uint256 | 焼却するトークンID |
 
 #### 必要条件
-- msg.senderがトークンの所有者、承認済み、またはコントラクトオーナー
+- msg.senderがトークンの所有者、承認済み、またはコントラクトオーナー (E15)
 
 #### 動作
 1. 権限チェック
@@ -227,10 +230,8 @@ NFTを焼却（永久に削除）する
 ### config
 ```solidity
 function config(
-    uint256 _maxFeeRate,
-    uint256 _mintFee,
-    string memory newName,
-    string memory newSymbol
+    uint16 _maxFeeRate,
+    uint96 _mintFee
 ) external
 ```
 
@@ -240,18 +241,16 @@ function config(
 #### パラメータ
 | 名前 | 型 | 説明 |
 |------|-----|------|
-| _maxFeeRate | uint256 | 最大ロイヤリティ率（ベーシスポイント） |
-| _mintFee | uint256 | ミント手数料（wei） |
-| newName | string | 新しいトークン名（現在は未使用） |
-| newSymbol | string | 新しいシンボル（現在は未使用） |
+| _maxFeeRate | uint16 | 最大ロイヤリティ率（ベーシスポイント） |
+| _mintFee | uint96 | ミント手数料（wei） |
 
 #### 必要条件
-- msg.sender == owner
-- _maxFeeRate <= 1000 (10%)
-- _mintFee <= 1 ether
+- msg.sender == owner (E7)
+- _maxFeeRate <= 1000 (10%) (E8)
+- _mintFee <= 1 ether (E9)
 
 #### イベント
-- ConfigUpdated(uint256 maxFeeRate, uint256 mintFee, string name, string symbol)
+- ConfigUpdated(uint16 maxFeeRate, uint96 mintFee, string name, string symbol)
 
 ---
 
@@ -264,8 +263,8 @@ function withdraw() external nonReentrant
 コントラクトに蓄積されたETHを引き出す（オーナー専用）
 
 #### 必要条件
-- msg.sender == owner
-- address(this).balance > 0
+- msg.sender == owner (E7)
+- address(this).balance > 0 (E10)
 
 #### 動作
 1. 残高を取得
@@ -292,8 +291,8 @@ function setImporter(address importer, bool status) external
 | status | bool | 権限の有効/無効 |
 
 #### 必要条件
-- msg.sender == owner
-- importer != address(0)
+- msg.sender == owner (E7)
+- importer != address(0) (E13)
 
 #### イベント
 - ImporterSet(address importer, bool status)
@@ -319,95 +318,57 @@ function tokenURI(uint256 tokenId) public view virtual override returns (string 
 - string: メタデータのURI
 
 #### エラー
-- "ERC721: invalid token ID": トークンが存在しない場合
+- ERC721: invalid token ID: トークンが存在しない場合
 
 ---
 
-### getOwner
-```solidity
-function getOwner() external view returns (address)
-```
+## パブリック変数・マッピング
 
-#### 概要
-コントラクトのオーナーアドレスを取得
+以下の変数・マッピングはpublicとして宣言されているため、直接アクセス可能です：
 
-#### 戻り値
-- address: オーナーのアドレス
-
----
-
-### getMintFee
-```solidity
-function getMintFee() external view returns (uint256)
-```
-
-#### 概要
-現在のミント手数料を取得
-
-#### 戻り値
-- uint256: ミント手数料（wei）
-
----
-
-### getMaxFeeRate
-```solidity
-function getMaxFeeRate() external view returns (uint256)
-```
-
-#### 概要
-最大ロイヤリティ率を取得
-
-#### 戻り値
-- uint256: 最大ロイヤリティ率（ベーシスポイント）
-
----
-
-### getLastId
-```solidity
-function getLastId() external view returns (uint256)
-```
-
-#### 概要
-最後にミントされたトークンIDを取得
-
-#### 戻り値
-- uint256: 最新のトークンID
-
----
-
-### getTotalDonations
-```solidity
-function getTotalDonations(address donor) external view returns (uint256)
-```
-
-#### 概要
-特定アドレスの累計寄付額を取得
-
-#### パラメータ
+### 変数
 | 名前 | 型 | 説明 |
 |------|-----|------|
-| donor | address | 照会するアドレス |
+| owner | address | コントラクトのオーナーアドレス |
+| mintFee | uint96 | ミント手数料（wei） |
+| maxFeeRate | uint16 | 最大ロイヤリティ率（ベーシスポイント） |
+| lastId | uint128 | 最後にミントされたトークンID |
+| totalBurned | uint128 | 累計焼却トークン数 |
 
-#### 戻り値
-- uint256: 累計寄付額（wei）
+### マッピング
+| 名前 | キー型 | 値型 | 説明 |
+|------|---------|-------|------|
+| metaUrl | uint256 | string | トークンIDからメタデータURLへのマッピング |
+| sbtFlag | uint256 | bool | トークンIDからSBTフラグへのマッピング |
+| totalDonations | address | uint256 | アドレスから累計寄付額へのマッピング |
+| creatorTokens | address | uint256[] | クリエイターアドレスからトークンID配列へのマッピング |
+| tokenCreator | uint256 | address | トークンIDからクリエイターアドレスへのマッピング |
+| originalTokenInfo | uint256 | string | トークンIDからオリジナル情報へのマッピング |
+| importers | address | bool | アドレスからインポート権限へのマッピング |
 
----
+#### 使用例
+```javascript
+// 変数の取得
+const owner = await contract.owner();
+const mintFee = await contract.mintFee();
+const maxFeeRate = await contract.maxFeeRate();
+const lastId = await contract.lastId();
+const totalBurned = await contract.totalBurned();
 
-### isSBT
-```solidity
-function isSBT(uint256 tokenId) external view returns (bool)
+// マッピングの取得
+const metaUrl = await contract.metaUrl(tokenId);
+const isSBT = await contract.sbtFlag(tokenId);
+const donations = await contract.totalDonations(userAddress);
+const creator = await contract.tokenCreator(tokenId);
+const isImporter = await contract.importers(address);
+const originalInfo = await contract.originalTokenInfo(tokenId);
+
+// creatorTokensの取得（配列要素の取得には特別なメソッドが必要）
+const tokenCount = await contract.getCreatorTokenCount(creator);
+for (let i = 0; i < tokenCount; i++) {
+    const tokenId = await contract.creatorTokens(creator, i);
+}
 ```
-
-#### 概要
-トークンがSoul Bound Token（譲渡不可）かを確認
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| tokenId | uint256 | 照会するトークンID |
-
-#### 戻り値
-- bool: SBTの場合true
 
 ---
 
@@ -424,41 +385,6 @@ function getCreators() external view returns (address[] memory)
 
 ---
 
-### getCreatorTokens
-```solidity
-function getCreatorTokens(address creator) external view returns (uint256[] memory)
-```
-
-#### 概要
-特定クリエイターが作成した全トークンIDを取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| creator | address | クリエイターのアドレス |
-
-#### 戻り値
-- uint256[]: トークンIDの配列
-
----
-
-### getTokenCreator
-```solidity
-function getTokenCreator(uint256 tokenId) external view returns (address)
-```
-
-#### 概要
-特定トークンのクリエイターアドレスを取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| tokenId | uint256 | 照会するトークンID |
-
-#### 戻り値
-- address: クリエイターのアドレス
-
----
 
 ### getCreatorCount
 ```solidity
@@ -491,223 +417,6 @@ function getCreatorTokenCount(address creator) external view returns (uint256)
 
 ---
 
-### getTotalBurned
-```solidity
-function getTotalBurned() external view returns (uint256)
-```
-
-#### 概要
-これまでに焼却されたトークンの総数を取得
-
-#### 戻り値
-- uint256: 焼却されたトークン数
-
----
-
-### getOriginalTokenInfo
-```solidity
-function getOriginalTokenInfo(uint256 tokenId) external view returns (string memory)
-```
-
-#### 概要
-インポートされたトークンのオリジナル情報を取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| tokenId | uint256 | 照会するトークンID |
-
-#### 戻り値
-- string: オリジナルNFTの情報
-
----
-
-### isImporter
-```solidity
-function isImporter(address account) external view returns (bool)
-```
-
-#### 概要
-特定アドレスがインポート権限を持つか確認
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| account | address | 確認するアドレス |
-
-#### 戻り値
-- bool: インポート権限がある場合true
-
----
-
-### getOwnedTokens
-```solidity
-function getOwnedTokens(address tokenOwner) external view returns (uint256[] memory)
-```
-
-#### 概要
-特定のアドレスが所有する全てのトークンIDを取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| tokenOwner | address | 所有者のアドレス |
-
-#### 戻り値
-- uint256[]: 所有しているトークンIDの配列
-
-#### 使用例
-```javascript
-// アドレスが所有する全NFTを取得
-const ownedTokenIds = await contract.getOwnedTokens("0x123...");
-console.log(ownedTokenIds); // [1, 5, 12, 23]
-
-// 詳細情報も含めて取得
-const detailedNFTs = await Promise.all(
-    ownedTokenIds.map(async (tokenId) => ({
-        tokenId: tokenId.toString(),
-        uri: await contract.tokenURI(tokenId),
-        creator: await contract.getTokenCreator(tokenId),
-        isSBT: await contract.isSBT(tokenId)
-    }))
-);
-```
-
----
-
-### getTokensByCreator
-```solidity
-function getTokensByCreator(address creator) external view returns (uint256[] memory)
-```
-
-#### 概要
-特定のクリエイターが作成した全てのトークンIDを取得（getCreatorTokensのエイリアス）
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| creator | address | クリエイターのアドレス |
-
-#### 戻り値
-- uint256[]: クリエイターが作成したトークンIDの配列
-
-#### 使用例
-```javascript
-// クリエイターが作成した全NFTを取得
-const createdTokenIds = await contract.getTokensByCreator("0x456...");
-console.log(createdTokenIds); // [2, 7, 15, 28]
-
-// getCreatorTokensと同じ結果
-const sameResult = await contract.getCreatorTokens("0x456...");
-console.log(createdTokenIds.toString() === sameResult.toString()); // true
-```
-
-#### 関連メソッド
-- `getCreatorTokens`: 同じ機能（こちらも利用可能）
-- `getCreatorTokenCount`: トークン数のみを取得
-
----
-
-### getOwnedTokensDetailed
-```solidity
-function getOwnedTokensDetailed(address tokenOwner) external view returns (TokenDetail[] memory)
-```
-
-#### 概要
-特定のアドレスが所有する全てのトークンの詳細情報を取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| tokenOwner | address | 所有者のアドレス |
-
-#### 戻り値
-- TokenDetail[]: トークンの詳細情報の配列
-
-#### TokenDetail構造体
-```solidity
-struct TokenDetail {
-    uint256 tokenId;      // トークンID
-    string metaUrl;       // メタデータURL
-    address currentOwner; // 現在の所有者
-    address creator;      // クリエイター
-    bool isSBT;          // SBTフラグ
-    string originalInfo;  // インポート元情報
-}
-```
-
-#### 使用例
-```javascript
-// 所有NFTの詳細を一度に取得
-const detailedNFTs = await contract.getOwnedTokensDetailed("0x123...");
-console.log(detailedNFTs);
-// [
-//   {
-//     tokenId: 1,
-//     metaUrl: "ipfs://...",
-//     currentOwner: "0x123...",
-//     creator: "0x456...",
-//     isSBT: false,
-//     originalInfo: ""
-//   },
-//   ...
-// ]
-```
-
----
-
-### getTokensByCreatorDetailed
-```solidity
-function getTokensByCreatorDetailed(address creator) external view returns (TokenDetail[] memory)
-```
-
-#### 概要
-特定のクリエイターが作成した全てのトークンの詳細情報を取得
-
-#### パラメータ
-| 名前 | 型 | 説明 |
-|------|-----|------|
-| creator | address | クリエイターのアドレス |
-
-#### 戻り値
-- TokenDetail[]: トークンの詳細情報の配列
-
-#### 使用例
-```javascript
-// クリエイターの作成NFTの詳細を一度に取得
-const createdNFTs = await contract.getTokensByCreatorDetailed("0x456...");
-console.log(createdNFTs);
-// [
-//   {
-//     tokenId: 2,
-//     metaUrl: "ipfs://...",
-//     currentOwner: "0x789...",  // 現在の所有者（クリエイターとは異なる場合も）
-//     creator: "0x456...",
-//     isSBT: true,
-//     originalInfo: ""
-//   },
-//   ...
-// ]
-```
-
-#### パフォーマンス比較
-```javascript
-// 従来の方法（複数回のRPC呼び出し）
-const tokenIds = await contract.getCreatorTokens(creator);
-const details = await Promise.all(
-    tokenIds.map(async (id) => ({
-        tokenId: id,
-        metaUrl: await contract.tokenURI(id),
-        currentOwner: await contract.ownerOf(id),
-        // ... 各フィールドごとにRPC呼び出し
-    }))
-);
-
-// 新しい方法（1回のRPC呼び出し）
-const details = await contract.getTokensByCreatorDetailed(creator);
-```
-
----
 
 ## 内部関数
 
@@ -729,7 +438,7 @@ function _beforeTokenTransfer(
 - SBTフラグがtrueの場合は転送を拒否
 
 #### エラー
-- "SBT: Token transfer not allowed": SBTの転送試行時
+- E12: SBTの転送試行時
 
 ---
 
@@ -765,3 +474,25 @@ function supportsInterface(bytes4 interfaceId)
 - ERC721Enumerable
 - ERC2981（ロイヤリティ）
 - ERC165
+
+---
+
+## エラーコード一覧
+
+| コード | 説明 | 発生箇所 |
+|--------|------|----------|
+| E1 | ミント手数料が不足 | mint() |
+| E2 | ロイヤリティ率が最大値を超過 | mint() |
+| E3 | トークンの所有者または承認済みでない | transferFromWithDonation(), safeTransferFromWithDonation(), transferFromWithCashback() |
+| E4 | msg.valueが0 | transferFromWithCashback() |
+| E5 | 送信先アドレスが0x0 | transferFromWithCashback() |
+| E6 | キャッシュバック送信失敗 | transferFromWithCashback() |
+| E7 | コントラクトオーナーでない | config(), withdraw(), setImporter() |
+| E8 | 最大ロイヤリティ率が1000を超過 | config() |
+| E9 | ミント手数料が1 etherを超過 | config() |
+| E10 | コントラクト残高が0 | withdraw() |
+| E11 | ETH送信失敗 | withdraw() |
+| E12 | SBTの転送試行 | _beforeTokenTransfer() |
+| E13 | インポーターアドレスが0x0 | setImporter() |
+| E14 | インポート権限なし | mintImported() |
+| E15 | バーン権限なし | burn() |
