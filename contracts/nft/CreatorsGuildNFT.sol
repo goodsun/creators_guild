@@ -28,6 +28,16 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
     
     // Arrays
     address[] private creators;
+    
+    // Struct for detailed token information
+    struct TokenDetail {
+        uint256 tokenId;
+        string metaUrl;
+        address currentOwner;
+        address creator;
+        bool isSBT;
+        string originalInfo;
+    }
 
     // Events
     event ConfigUpdated(uint16 maxFeeRate, uint96 mintFee, string name, string symbol);
@@ -289,6 +299,46 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
     // Get all tokens created by a specific creator (alias for getCreatorTokens)
     function getTokensByCreator(address creator) external view returns (uint256[] memory) {
         return creatorTokens[creator];
+    }
+
+    // Get detailed information for all tokens owned by a specific address
+    function getOwnedTokensDetailed(address tokenOwner) external view returns (TokenDetail[] memory) {
+        uint256 balance = balanceOf(tokenOwner);
+        TokenDetail[] memory details = new TokenDetail[](balance);
+        
+        for (uint256 i = 0; i < balance; i++) {
+            uint256 tokenId = tokenOfOwnerByIndex(tokenOwner, i);
+            details[i] = TokenDetail({
+                tokenId: tokenId,
+                metaUrl: metaUrl[tokenId],
+                currentOwner: tokenOwner,
+                creator: tokenCreator[tokenId],
+                isSBT: sbtFlag[tokenId],
+                originalInfo: originalTokenInfo[tokenId]
+            });
+        }
+        
+        return details;
+    }
+
+    // Get detailed information for all tokens created by a specific creator
+    function getTokensByCreatorDetailed(address creator) external view returns (TokenDetail[] memory) {
+        uint256[] memory tokenIds = creatorTokens[creator];
+        TokenDetail[] memory details = new TokenDetail[](tokenIds.length);
+        
+        for (uint256 i = 0; i < tokenIds.length; i++) {
+            uint256 tokenId = tokenIds[i];
+            details[i] = TokenDetail({
+                tokenId: tokenId,
+                metaUrl: metaUrl[tokenId],
+                currentOwner: ownerOf(tokenId),
+                creator: creator,
+                isSBT: sbtFlag[tokenId],
+                originalInfo: originalTokenInfo[tokenId]
+            });
+        }
+        
+        return details;
     }
 
     // Import function for external use (called by DonatableNFTImporter)

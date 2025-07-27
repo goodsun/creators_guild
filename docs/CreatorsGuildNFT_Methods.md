@@ -608,6 +608,107 @@ console.log(createdTokenIds.toString() === sameResult.toString()); // true
 
 ---
 
+### getOwnedTokensDetailed
+```solidity
+function getOwnedTokensDetailed(address tokenOwner) external view returns (TokenDetail[] memory)
+```
+
+#### 概要
+特定のアドレスが所有する全てのトークンの詳細情報を取得
+
+#### パラメータ
+| 名前 | 型 | 説明 |
+|------|-----|------|
+| tokenOwner | address | 所有者のアドレス |
+
+#### 戻り値
+- TokenDetail[]: トークンの詳細情報の配列
+
+#### TokenDetail構造体
+```solidity
+struct TokenDetail {
+    uint256 tokenId;      // トークンID
+    string metaUrl;       // メタデータURL
+    address currentOwner; // 現在の所有者
+    address creator;      // クリエイター
+    bool isSBT;          // SBTフラグ
+    string originalInfo;  // インポート元情報
+}
+```
+
+#### 使用例
+```javascript
+// 所有NFTの詳細を一度に取得
+const detailedNFTs = await contract.getOwnedTokensDetailed("0x123...");
+console.log(detailedNFTs);
+// [
+//   {
+//     tokenId: 1,
+//     metaUrl: "ipfs://...",
+//     currentOwner: "0x123...",
+//     creator: "0x456...",
+//     isSBT: false,
+//     originalInfo: ""
+//   },
+//   ...
+// ]
+```
+
+---
+
+### getTokensByCreatorDetailed
+```solidity
+function getTokensByCreatorDetailed(address creator) external view returns (TokenDetail[] memory)
+```
+
+#### 概要
+特定のクリエイターが作成した全てのトークンの詳細情報を取得
+
+#### パラメータ
+| 名前 | 型 | 説明 |
+|------|-----|------|
+| creator | address | クリエイターのアドレス |
+
+#### 戻り値
+- TokenDetail[]: トークンの詳細情報の配列
+
+#### 使用例
+```javascript
+// クリエイターの作成NFTの詳細を一度に取得
+const createdNFTs = await contract.getTokensByCreatorDetailed("0x456...");
+console.log(createdNFTs);
+// [
+//   {
+//     tokenId: 2,
+//     metaUrl: "ipfs://...",
+//     currentOwner: "0x789...",  // 現在の所有者（クリエイターとは異なる場合も）
+//     creator: "0x456...",
+//     isSBT: true,
+//     originalInfo: ""
+//   },
+//   ...
+// ]
+```
+
+#### パフォーマンス比較
+```javascript
+// 従来の方法（複数回のRPC呼び出し）
+const tokenIds = await contract.getCreatorTokens(creator);
+const details = await Promise.all(
+    tokenIds.map(async (id) => ({
+        tokenId: id,
+        metaUrl: await contract.tokenURI(id),
+        currentOwner: await contract.ownerOf(id),
+        // ... 各フィールドごとにRPC呼び出し
+    }))
+);
+
+// 新しい方法（1回のRPC呼び出し）
+const details = await contract.getTokensByCreatorDetailed(creator);
+```
+
+---
+
 ## 内部関数
 
 ### _beforeTokenTransfer
