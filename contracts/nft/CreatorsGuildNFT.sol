@@ -5,25 +5,32 @@ import "github.com/OpenZeppelin/openzeppelin-contracts/blob/v4.7.3/contracts/sec
 import "./RoyaltyStandard.sol";
 
 contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard {
-    string private _name;
-    string private _symbol;
-    address public _owner;
-    uint256 public _mintFee;
-    uint256 public _maxFeeRate;
-    mapping(uint256 => string) private _metaUrl;
-    mapping(uint256 => bool) public _sbtFlag;
-    uint256 public _lastId;
-    mapping(address => uint256) public _totalDonations;
-    address[] private _creators;
-    mapping(address => bool) private _isCreator;
-    mapping(address => uint256[]) private _creatorTokens;
-    mapping(uint256 => address) private _tokenCreator;
-    mapping(uint256 => string) public _originalTokenInfo;
-    mapping(address => bool) public _importers;
-    uint256 public _totalBurned;
+    // Storage slot 1: address (20 bytes) + uint96 (12 bytes) = 32 bytes
+    address private owner;
+    uint96 private mintFee; // Max ~79 billion ether, more than enough
+    
+    // Storage slot 2: uint16 (2 bytes) + padding
+    uint16 private maxFeeRate; // Max 65535 basis points (655.35%)
+    
+    // Storage slot 3+: individual variables
+    uint256 private lastId;
+    uint256 private totalBurned;
+    
+    // Mappings
+    mapping(uint256 => string) private metaUrl;
+    mapping(uint256 => bool) private sbtFlag;
+    mapping(address => uint256) private totalDonations;
+    mapping(address => bool) private isCreator;
+    mapping(address => uint256[]) private creatorTokens;
+    mapping(uint256 => address) private tokenCreator;
+    mapping(uint256 => string) private originalTokenInfo;
+    mapping(address => bool) private importers;
+    
+    // Arrays
+    address[] private creators;
 
     // Events
-    event ConfigUpdated(uint256 maxFeeRate, uint256 mintFee, string name, string symbol);
+    event ConfigUpdated(uint16 maxFeeRate, uint96 mintFee, string name, string symbol);
     event Withdrawal(address indexed owner, uint256 amount);
     event DonationReceived(address indexed from, address indexed to, uint256 amount);
     event ImporterSet(address indexed importer, bool status);
@@ -38,42 +45,36 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         string memory _nameParam,
         string memory _symbolParam
     ) ERC721(_nameParam, _symbolParam) {
-        _owner = msg.sender;
-        _mintFee = 5000000000000000;
-        _name = _nameParam;
-        _symbol = _symbolParam;
+        owner = msg.sender;
+        mintFee = 5000000000000000; // 0.005 ether
     }
 
     /*
     * @param address to
     * @param string metaUrl
     */
-    function mint(address to,  string memory metaUrl, uint16 feeRate, bool sbtFlag) public payable {
-        require(msg.value >= _mintFee, "Insufficient Mint Fee");
-        require(feeRate <= _maxFeeRate, "over Max Fee Rate");
+    function mint(address to, string memory _metaUrl, uint16 feeRate, bool _sbtFlag) public payable {
+        require(msg.value >= mintFee, "Insufficient Mint Fee");
+        require(feeRate <= maxFeeRate, "over Max Fee Rate");
 
-        if(msg.value - _mintFee > 0){
-           _totalDonations[msg.sender] = _totalDonations[msg.sender] + (msg.value - _mintFee);
+        if(msg.value > mintFee){
+           totalDonations[msg.sender] = totalDonations[msg.sender] + (msg.value - mintFee);
         }
 
-        _lastId++;
-        uint256 tokenId = _lastId;
-        _metaUrl[tokenId] = metaUrl;
-        if (sbtFlag) {
-            _sbtFlag[tokenId] = true;
-        }else{
-            _sbtFlag[tokenId] = false;
-        }
+        lastId++;
+        uint256 tokenId = lastId;
+        metaUrl[tokenId] = _metaUrl;
+        sbtFlag[tokenId] = _sbtFlag;
         _mint(to, tokenId);
         _setTokenRoyalty(tokenId, msg.sender, feeRate * 100); // 100 = 1%
 
         // Track creator
-        if (!_isCreator[msg.sender]) {
-            _isCreator[msg.sender] = true;
-            _creators.push(msg.sender);
+        if (!isCreator[msg.sender]) {
+            isCreator[msg.sender] = true;
+            creators.push(msg.sender);
         }
-        _creatorTokens[msg.sender].push(tokenId);
-        _tokenCreator[tokenId] = msg.sender;
+        creatorTokens[msg.sender].push(tokenId);
+        tokenCreator[tokenId] = msg.sender;
     }
 
     /*
@@ -96,16 +97,16 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         uint256 tokenId
     ) public view virtual override returns (string memory) {
         _requireMinted(tokenId);
-        return _metaUrl[tokenId];
+        return metaUrl[tokenId];
     }
 
     function burn(uint256 tokenId) external {
         require(
-            _isApprovedOrOwner(_msgSender(), tokenId) || msg.sender == _owner,
+            _isApprovedOrOwner(_msgSender(), tokenId) || msg.sender == owner,
             "Caller is not owner nor approved"
         );
-        _originalTokenInfo[tokenId] = "";
-        _metaUrl[tokenId] = "";
+        originalTokenInfo[tokenId] = "";
+        metaUrl[tokenId] = "";
         _burn(tokenId);
     }
 
@@ -117,7 +118,7 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: caller is not token owner nor approved");
         _transfer(from, to, tokenId);
         if (msg.value > 0) {
-            _totalDonations[to] = _totalDonations[to] + msg.value;
+            totalDonations[to] = totalDonations[to] + msg.value;
             emit DonationReceived(from, to, msg.value);
         }
     }
@@ -139,7 +140,7 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         require(_isApprovedOrOwner(_msgSender(), tokenId), "ERC721: caller is not token owner nor approved");
         _safeTransfer(from, to, tokenId, data);
         if (msg.value > 0) {
-            _totalDonations[to] = _totalDonations[to] + msg.value;
+            totalDonations[to] = totalDonations[to] + msg.value;
             emit DonationReceived(from, to, msg.value);
         }
     }
@@ -158,7 +159,7 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
 
         // State changes first
         _transfer(from, to, tokenId);
-        _totalDonations[to] = _totalDonations[to] + donation;
+        totalDonations[to] = totalDonations[to] + donation;
         emit DonationReceived(from, to, donation);
 
         // External calls last
@@ -172,23 +173,19 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         extra method
      */
     function config(
-        uint256 maxFeeRate,
-        uint256 mintFee,
-        string memory newName,
-        string memory newSymbol
+        uint16 _maxFeeRate,
+        uint96 _mintFee
     ) external {
-        require(_owner == msg.sender, "Can't set. owner only");
-        require(maxFeeRate <= 1000, "Max fee rate too high (max 10%)");
-        require(mintFee <= 1 ether, "Mint fee too high");
-        _maxFeeRate = maxFeeRate;
-        _mintFee = mintFee;
-        _name = newName;
-        _symbol = newSymbol;
-        emit ConfigUpdated(maxFeeRate, mintFee, newName, newSymbol);
+        require(owner == msg.sender, "Can't set. owner only");
+        require(_maxFeeRate <= 1000, "Max fee rate too high (max 10%)");
+        require(_mintFee <= 1 ether, "Mint fee too high");
+        maxFeeRate = _maxFeeRate;
+        mintFee = _mintFee;
+        emit ConfigUpdated(_maxFeeRate, _mintFee, "", "");
     }
 
     function withdraw() external nonReentrant {
-        require(_owner == msg.sender, "Can't withdraw. owner only");
+        require(owner == msg.sender, "Can't withdraw. owner only");
         uint256 balance = address(this).balance;
         require(balance > 0, "No balance to withdraw");
         emit Withdrawal(msg.sender, balance);
@@ -202,7 +199,7 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         uint256 tokenId
     ) internal virtual override {
         if (from != address(0) && to != address(0) && to != 0x000000000000000000000000000000000000dEaD) {
-            require(!_sbtFlag[tokenId], "SBT: Token transfer not allowed");
+            require(!sbtFlag[tokenId], "SBT: Token transfer not allowed");
         }
         super._beforeTokenTransfer(from, to, tokenId);
     }
@@ -210,75 +207,100 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
     function _burn(uint256 tokenId) internal virtual override {
         super._safeTransfer(ownerOf(tokenId), 0x000000000000000000000000000000000000dEaD, tokenId, "");
         super._burn(tokenId);
-        _totalBurned++;
+        totalBurned++;
     }
 
-    function name() public view virtual override returns (string memory) {
-        return _name;
+    // Getter functions
+    function getOwner() external view returns (address) {
+        return owner;
     }
 
-    function symbol() public view virtual override returns (string memory) {
-        return _symbol;
+    function getMintFee() external view returns (uint256) {
+        return mintFee;
+    }
+
+    function getMaxFeeRate() external view returns (uint256) {
+        return maxFeeRate;
+    }
+
+    function getLastId() external view returns (uint256) {
+        return lastId;
+    }
+
+    function getTotalDonations(address account) external view returns (uint256) {
+        return totalDonations[account];
+    }
+
+    function isSBT(uint256 tokenId) external view returns (bool) {
+        return sbtFlag[tokenId];
+    }
+
+    function getOriginalTokenInfo(uint256 tokenId) external view returns (string memory) {
+        return originalTokenInfo[tokenId];
+    }
+
+    function isImporter(address account) external view returns (bool) {
+        return importers[account];
     }
 
     function getCreators() external view returns (address[] memory) {
-        return _creators;
+        return creators;
     }
 
     function getCreatorTokens(address creator) external view returns (uint256[] memory) {
-        return _creatorTokens[creator];
+        return creatorTokens[creator];
     }
 
     function getTokenCreator(uint256 tokenId) external view returns (address) {
-        return _tokenCreator[tokenId];
+        return tokenCreator[tokenId];
     }
 
     function getCreatorCount() external view returns (uint256) {
-        return _creators.length;
+        return creators.length;
     }
 
     function getCreatorTokenCount(address creator) external view returns (uint256) {
-        return _creatorTokens[creator].length;
+        return creatorTokens[creator].length;
     }
 
     function getTotalBurned() external view returns (uint256) {
-        return _totalBurned;
+        return totalBurned;
     }
 
     function setImporter(address importer, bool status) external {
-        require(msg.sender == _owner, "Owner only");
+        require(msg.sender == owner, "Owner only");
         require(importer != address(0), "Invalid importer address");
-        _importers[importer] = status;
+        importers[importer] = status;
         emit ImporterSet(importer, status);
     }
 
     // Import function for external use (called by DonatableNFTImporter)
     function mintImported(
         address to,
-        string memory metaUrl,
+        string memory _metaUrl,
         uint16 feeRate,
-        bool sbtFlag,
+        bool _sbtFlag,
         address creator,
-        string memory originalInfo
+        string memory _originalInfo
     ) external returns (uint256) {
-        require(msg.sender == _owner || _importers[msg.sender], "Not authorized");
+        require(msg.sender == owner || importers[msg.sender], "Not authorized");
 
-        _lastId++;
-        uint256 tokenId = _lastId;
-        _metaUrl[tokenId] = metaUrl;
-        _sbtFlag[tokenId] = sbtFlag;
-        _originalTokenInfo[tokenId] = originalInfo;
+        lastId++;
+        uint256 tokenId = lastId;
+        metaUrl[tokenId] = _metaUrl;
+        sbtFlag[tokenId] = _sbtFlag;
+        originalTokenInfo[tokenId] = _originalInfo;
 
         _mint(to, tokenId);
         _setTokenRoyalty(tokenId, creator, feeRate * 100);
 
         // Track creator
-        if (!_isCreator[creator]) {
-            _isCreator[creator] = true;
-            _creators.push(creator);
+        if (!isCreator[creator]) {
+            isCreator[creator] = true;
+            creators.push(creator);
         }
-        _creatorTokens[creator].push(tokenId);
-        _tokenCreator[tokenId] = creator;
+        creatorTokens[creator].push(tokenId);
+        tokenCreator[tokenId] = creator;
 
         return tokenId;
     }
