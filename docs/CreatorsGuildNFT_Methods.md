@@ -540,6 +540,74 @@ function isImporter(address account) external view returns (bool)
 
 ---
 
+### getOwnedTokens
+```solidity
+function getOwnedTokens(address tokenOwner) external view returns (uint256[] memory)
+```
+
+#### 概要
+特定のアドレスが所有する全てのトークンIDを取得
+
+#### パラメータ
+| 名前 | 型 | 説明 |
+|------|-----|------|
+| tokenOwner | address | 所有者のアドレス |
+
+#### 戻り値
+- uint256[]: 所有しているトークンIDの配列
+
+#### 使用例
+```javascript
+// アドレスが所有する全NFTを取得
+const ownedTokenIds = await contract.getOwnedTokens("0x123...");
+console.log(ownedTokenIds); // [1, 5, 12, 23]
+
+// 詳細情報も含めて取得
+const detailedNFTs = await Promise.all(
+    ownedTokenIds.map(async (tokenId) => ({
+        tokenId: tokenId.toString(),
+        uri: await contract.tokenURI(tokenId),
+        creator: await contract.getTokenCreator(tokenId),
+        isSBT: await contract.isSBT(tokenId)
+    }))
+);
+```
+
+---
+
+### getTokensByCreator
+```solidity
+function getTokensByCreator(address creator) external view returns (uint256[] memory)
+```
+
+#### 概要
+特定のクリエイターが作成した全てのトークンIDを取得（getCreatorTokensのエイリアス）
+
+#### パラメータ
+| 名前 | 型 | 説明 |
+|------|-----|------|
+| creator | address | クリエイターのアドレス |
+
+#### 戻り値
+- uint256[]: クリエイターが作成したトークンIDの配列
+
+#### 使用例
+```javascript
+// クリエイターが作成した全NFTを取得
+const createdTokenIds = await contract.getTokensByCreator("0x456...");
+console.log(createdTokenIds); // [2, 7, 15, 28]
+
+// getCreatorTokensと同じ結果
+const sameResult = await contract.getCreatorTokens("0x456...");
+console.log(createdTokenIds.toString() === sameResult.toString()); // true
+```
+
+#### 関連メソッド
+- `getCreatorTokens`: 同じ機能（こちらも利用可能）
+- `getCreatorTokenCount`: トークン数のみを取得
+
+---
+
 ## 内部関数
 
 ### _beforeTokenTransfer

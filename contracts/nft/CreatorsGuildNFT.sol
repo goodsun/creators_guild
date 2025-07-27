@@ -274,6 +274,23 @@ contract CreatorsGuildNFT is ERC721Enumerable, RoyaltyStandard, ReentrancyGuard 
         emit ImporterSet(importer, status);
     }
 
+    // Get all tokens owned by a specific address
+    function getOwnedTokens(address tokenOwner) external view returns (uint256[] memory) {
+        uint256 balance = balanceOf(tokenOwner);
+        uint256[] memory tokens = new uint256[](balance);
+        
+        for (uint256 i = 0; i < balance; i++) {
+            tokens[i] = tokenOfOwnerByIndex(tokenOwner, i);
+        }
+        
+        return tokens;
+    }
+
+    // Get all tokens created by a specific creator (alias for getCreatorTokens)
+    function getTokensByCreator(address creator) external view returns (uint256[] memory) {
+        return creatorTokens[creator];
+    }
+
     // Import function for external use (called by DonatableNFTImporter)
     function mintImported(
         address to,
